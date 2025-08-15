@@ -1,5 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Mail, X, Sparkles, LoaderCircle } from 'lucide-react';
+
+// Firebase imports
+import { auth, db } from '../firebase';
+import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 import GoogleIcon from '../components/GoogleIcon';
 
@@ -35,6 +41,58 @@ const WelcomeScreen = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [generatedPitch, setGeneratedPitch] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
+
+  // --- Auth State Listener ---
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        // User is signed in. Now, we wrap Firestore logic in a try...catch.
+        try {
+          console.log("Authentication successful. Checking Firestore...");
+          const userDocRef = doc(db, "users", user.uid);
+          const userDocSnap = await getDoc(userDocRef);
+
+          if (!userDocSnap.exists()) {
+            console.log("New user. Creating Firestore document...");
+            await setDoc(userDocRef, {
+              uid: user.uid,
+              displayName: user.displayName,
+              email: user.email,
+              photoURL: user.photoURL,
+              createdAt: serverTimestamp(),
+            });
+            console.log("Document created successfully.");
+          } else {
+            console.log("Existing user document found.");
+          }
+          
+          console.log("Firestore check complete. Navigating...");
+          navigate('/onboarding/chat');
+
+        } catch (error) {
+          // This will catch any errors from getDoc or setDoc
+          console.error("Firestore Error:", error);
+          alert("Error connecting to the database. Please check the console for details.");
+        }
+      }
+    });
+
+    // Cleanup the listener when the component unmounts.
+    return () => unsubscribe();
+  }, [navigate]);
+
+
+  // --- Google Sign-In Initiator ---
+  const handleGoogleSignIn = async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (error) {
+      console.error("Authentication popup error:", error);
+    }
+  };
+
 
   // Function to call the Gemini API
   const handleGeneratePitch = async () => {
@@ -93,7 +151,6 @@ const WelcomeScreen = () => {
       <div className="flex flex-col items-center justify-center min-h-screen w-full bg-gradient-to-br from-blue-50 to-indigo-100 p-4 font-sans">
         <div className="w-full max-w-md mx-auto text-center animate-fade-in-up">
           
-          {/* Logo and App Name */}
           <div className="mb-8">
             <div className="inline-block p-4 bg-white rounded-full shadow-lg">
               <svg className="w-16 h-16 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -104,14 +161,15 @@ const WelcomeScreen = () => {
             <h1 className="mt-4 text-4xl font-bold text-gray-800">Disha AI</h1>
           </div>
           
-          {/* Tagline */}
           <p className="mb-12 text-lg text-gray-600 md:text-xl">
             Your Personalized Career Navigator.
           </p>
           
-          {/* Call to Action Buttons */}
           <div className="space-y-4">
-            <button className="flex items-center justify-center w-full px-6 py-3 text-lg font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-transform transform hover:scale-105">
+            <button 
+              onClick={handleGoogleSignIn}
+              className="flex items-center justify-center w-full px-6 py-3 text-lg font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-transform transform hover:scale-105"
+            >
               <GoogleIcon />
               <span className="ml-4">Continue with Google</span>
             </button>
@@ -122,7 +180,6 @@ const WelcomeScreen = () => {
             </button>
           </div>
 
-          {/* Gemini-powered Feature Button */}
           <div className="mt-8">
             <button 
               onClick={handleGeneratePitch}
@@ -133,7 +190,6 @@ const WelcomeScreen = () => {
             </button>
           </div>
 
-          {/* Terms and Conditions */}
           <div className="mt-12 text-center">
               <p className="text-sm text-gray-500">
                   By continuing, you agree to Disha AI's <br />
