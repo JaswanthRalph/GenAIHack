@@ -20,7 +20,7 @@ const ChatOnboardingScreen = () => {
     const [userInput, setUserInput] = useState('');
     const [isBotTyping, setIsBotTyping] = useState(false);
     const [isConversationDone, setIsConversationDone] = useState(false);
-    const [isSaving, setIsSaving] = useState(false); // State for saving process
+    const [isSaving, setIsSaving] = useState(false);
   
     // --- Authentication ---
     useEffect(() => {
@@ -36,13 +36,11 @@ const ChatOnboardingScreen = () => {
   
     // --- Initial Bot Message ---
     useEffect(() => {
-      // Start the conversation only once when the user is authenticated
       if (user && !conversationStarted.current) {
         conversationStarted.current = true;
-        // The first message is now static to ensure it always starts correctly
         addMessage(`Hi there! I'm Disha, your career guide. To get started, what's your name and what are you currently studying?`, 'bot');
       }
-    }, [user]); // Dependency on user ensures it runs after user is set
+    }, [user]);
   
     // --- Scroll to Bottom ---
     useEffect(() => {
@@ -63,18 +61,12 @@ const ChatOnboardingScreen = () => {
         return;
       }
   
-      const conversationLength = currentHistory.filter(m => m.sender === 'user').length;
-  
-      // --- UPDATED SYSTEM PROMPT ---
-      // This new prompt guides the AI to summarize the conversation at the end.
       const systemPrompt = `You are Disha, a friendly AI career counselor. Your goal is to understand a student's interests, favorite subjects, and hobbies.
       - Ask short, engaging, open-ended questions, one at a time.
-      - Your first message is fixed. Start by asking about their favorite subjects.
-      - Then ask about their hobbies and interests.
       - After 3-4 questions, you MUST conclude.
-      - **Crucially, your final message must follow this JSON format and nothing else:**
+      - Your final message must follow this JSON format and nothing else:
         {
-          "summary": "A friendly concluding message for the user, like 'Thanks for sharing! I have a better idea of your interests now. Let's move to the next step.'",
+          "summary": "A friendly concluding message for the user.",
           "data": {
             "interests": "A summary of the user's stated interests.",
             "subjects": "A summary of the user's favorite subjects.",
@@ -104,39 +96,55 @@ const ChatOnboardingScreen = () => {
         const result = await response.json();
         const botResponseText = result.candidates[0].content.parts[0].text;
   
-        // Check if the response is the final JSON object
-        if (botResponseText.includes('{"summary"')) {
-          const jsonData = JSON.parse(botResponseText);
-          addMessage(jsonData.summary, 'bot');
-          await saveOnboardingData(jsonData.data); // Save the extracted data
-          setIsConversationDone(true);
-        } else {
-          addMessage(botResponseText, 'bot');
+        // --- ROBUST JSON PARSING ---
+        // Try to find and parse the JSON block from the response
+        const jsonMatch = botResponseText.match(/{[\s\S]*}/);
+        if (jsonMatch) {
+          try {
+            const jsonData = JSON.parse(jsonMatch[0]);
+            if (jsonData.summary && jsonData.data) {
+              // It's the final message. Display summary, save data, and end conversation.
+              addMessage(jsonData.summary, 'bot');
+              setIsConversationDone(true); // Disable input immediately
+              await saveOnboardingData(jsonData.data);
+              
+              // Navigate after a short delay
+              setTimeout(() => {
+                navigate('/document-upload');
+              }, 2500);
+              return; // Stop further processing
+            }
+          } catch (e) {
+            // It looked like JSON, but wasn't valid. Fall through and treat as a normal message.
+            console.error("Failed to parse JSON from bot response:", e);
+          }
         }
+        
+        // If it's a regular message (or JSON parsing failed), just add it to the chat
+        addMessage(botResponseText, 'bot');
   
       } catch (error) {
         console.error("Gemini API call failed:", error);
         addMessage("Sorry, I'm having a little trouble. Let's move to the next step.", 'bot');
-        setIsConversationDone(true); // Fail gracefully to unblock the user
+        setIsConversationDone(true);
+        setTimeout(() => navigate('/document-upload'), 2500);
       } finally {
         setIsBotTyping(false);
       }
     };
   
-    // --- Save Data to Firestore ---
     const saveOnboardingData = async (data) => {
       if (!user) return;
       setIsSaving(true);
       const userDocRef = doc(db, "users", user.uid);
       try {
         await updateDoc(userDocRef, {
-          onboardingData: data, // Save the structured data
+          onboardingData: data,
           onboardingCompletedAt: new Date()
         });
-        // The button will appear automatically as isConversationDone is true
       } catch (error) {
         console.error("Failed to save user data:", error);
-        addMessage("There was an error saving your info. But don't worry, you can proceed.", 'bot');
+        addMessage("There was an error saving your info, but we can continue.", 'bot');
       } finally {
         setIsSaving(false);
       }
@@ -155,66 +163,58 @@ const ChatOnboardingScreen = () => {
       if (e.key === 'Enter') handleSend();
     };
   
-    // --- UI RENDER ---
     return (
-        <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-50 to-blue-100 font-sans p-4">
-          <div className="flex flex-col w-full max-w-2xl h-[90vh] bg-white rounded-2xl shadow-2xl overflow-hidden">
-            
-            <div className="p-4 border-b border-gray-200">
-              <div className="flex items-center">
-                <Sparkles className="text-indigo-500 mr-3" size={24} />
-                <h1 className="text-xl font-bold text-gray-800">Disha AI Onboarding</h1>
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-50 to-blue-100 font-sans p-4">
+        <div className="flex flex-col w-full max-w-2xl h-[90vh] bg-white rounded-2xl shadow-2xl overflow-hidden">
+          
+          <div className="p-4 border-b border-gray-200 flex items-center">
+            <Sparkles className="text-indigo-500 mr-3" size={24} />
+            <h1 className="text-xl font-bold text-gray-800">Disha AI Onboarding</h1>
+          </div>
+  
+          <div className="flex-grow p-4 md:p-6 overflow-y-auto">
+            {messages.map((msg, index) => (
+              <ChatBubble key={index} message={msg.text} sender={msg.sender} />
+            ))}
+            {isBotTyping && <TypingIndicator />}
+            {isSaving && (
+              <div className="flex items-center justify-center text-gray-500 text-sm my-2">
+                <LoaderCircle className="animate-spin w-4 h-4 mr-2" />
+                Saving your responses...
               </div>
-            </div>
-    
-            <div className="flex-grow p-4 md:p-6 overflow-y-auto">
-              {messages.map((msg, index) => (
-                <ChatBubble key={index} message={msg.text} sender={msg.sender} />
-              ))}
-              {isBotTyping && <TypingIndicator />}
-              {isSaving && (
-                <div className="flex items-center justify-center text-gray-500 text-sm">
-                  <LoaderCircle className="animate-spin w-4 h-4 mr-2" />
-                  Saving your responses...
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+          
+          <div className="p-4 bg-white border-t border-gray-200">
+            {isConversationDone ? (
+                <div className="text-center text-gray-600 font-medium animate-pulse">
+                  Redirecting to the next step...
                 </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-            
-            <div className="p-4 bg-white border-t border-gray-200">
-              {isConversationDone ? (
-                  <button 
-                      onClick={() => navigate('/dashboard')}
-                      className="flex items-center justify-center w-full px-6 py-3 text-lg font-semibold text-white bg-green-500 rounded-lg shadow-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all transform hover:scale-105 animate-fade-in-up"
-                      disabled={isSaving}
+            ) : (
+                <div className="flex items-center bg-gray-100 rounded-full p-2 shadow-inner">
+                  <input
+                      type="text"
+                      value={userInput}
+                      onChange={(e) => setUserInput(e.target.value)}
+                      onKeyPress={handleKeyPress}
+                      placeholder={isBotTyping ? "Disha is typing..." : "Type your answer..."}
+                      className="flex-grow w-full px-4 py-2 bg-transparent focus:outline-none text-gray-700"
+                      disabled={isBotTyping}
+                  />
+                  <button
+                      onClick={handleSend}
+                      disabled={isBotTyping || userInput.trim() === ''}
+                      className="p-3 bg-indigo-600 text-white rounded-full disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
                   >
-                      {isSaving ? 'Finalizing...' : 'Go to Dashboard'}
-                      {!isSaving && <ArrowRight className="ml-2" />}
+                      <Send className="w-5 h-5" />
                   </button>
-              ) : (
-                  <div className="flex items-center bg-gray-100 rounded-full p-2 shadow-inner">
-                    <input
-                        type="text"
-                        value={userInput}
-                        onChange={(e) => setUserInput(e.target.value)}
-                        onKeyPress={handleKeyPress}
-                        placeholder={isBotTyping ? "Disha is typing..." : "Type your answer..."}
-                        className="flex-grow w-full px-4 py-2 bg-transparent focus:outline-none text-gray-700"
-                        disabled={isBotTyping}
-                    />
-                    <button
-                        onClick={handleSend}
-                        disabled={isBotTyping || userInput.trim() === ''}
-                        className="p-3 bg-indigo-600 text-white rounded-full disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
-                    >
-                        <Send className="w-5 h-5" />
-                    </button>
-                  </div>
-              )}
-            </div>
+                </div>
+            )}
           </div>
         </div>
-      );
+      </div>
+    );
 };
 
 export default ChatOnboardingScreen;

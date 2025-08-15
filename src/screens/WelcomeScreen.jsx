@@ -82,6 +82,14 @@ const WelcomeScreen = () => {
     return () => unsubscribe();
   }, [navigate]);
 
+  // --- Check for user session on component mount ---
+  useEffect(() => {
+    if (auth.currentUser) {
+      console.log("User session found on mount. Navigating...");
+      navigate('/onboarding/chat');
+    }
+  }, [navigate]);
+
 
   // --- Google Sign-In Initiator ---
   const handleGoogleSignIn = async () => {
@@ -168,7 +176,8 @@ const WelcomeScreen = () => {
           <div className="space-y-4">
             <button 
               onClick={handleGoogleSignIn}
-              className="flex items-center justify-center w-full px-6 py-3 text-lg font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-transform transform hover:scale-105"
+              className="flex items-center justify-center w-full px-6 py-3 text-lg font-semibold text-gray-700 bg-w
+              hite border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-transform transform hover:scale-105"
             >
               <GoogleIcon />
               <span className="ml-4">Continue with Google</span>

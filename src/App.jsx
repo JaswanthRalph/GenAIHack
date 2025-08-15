@@ -19,6 +19,8 @@ export default function App() {
         <Route path="/onboarding/upload" element={<DocumentUploadScreen />} />
 
         <Route path="/dashboard" element={<DashboardScreen />} />
+        
+        <Route path="/document-upload" element={<DocumentUploadScreen />} />
       </Routes>
     </BrowserRouter>
   );

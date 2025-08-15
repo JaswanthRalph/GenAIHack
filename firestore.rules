@@ -1,0 +1,12 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow users to read, create, and update their own user document.
+    // This rule is crucial for the Welcome screen (creating the doc) 
+    // and the Chat/Upload screens (updating the doc).
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
