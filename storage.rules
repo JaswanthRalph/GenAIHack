@@ -2,10 +2,8 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // --- User-Specific Document Uploads ---
-    // Allow authenticated users to upload files to a "documents" folder within their own user directory.
-    // This rule ensures that users can only write to their own storage space.
-    match /users/{userId}/documents/{fileName} {
+    // Allow users to read and write to their own user-specific folder
+    match /users/{userId}/{allPaths=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
   }

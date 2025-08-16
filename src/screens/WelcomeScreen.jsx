@@ -98,6 +98,8 @@ const WelcomeScreen = () => {
       await signInWithPopup(auth, provider);
     } catch (error) {
       console.error("Authentication popup error:", error);
+      // Display a more informative error to the user
+      alert(`Firebase Auth Error: ${error.code}\n\n${error.message}`);
     }
   };
 

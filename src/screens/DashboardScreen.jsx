@@ -77,26 +77,35 @@ const DashboardScreen = () => {
   
         if (userDocSnap.exists()) {
           const userData = userDocSnap.data();
-          
-          // Check if a report already exists
+          let shouldGenerateNewReport = true;
+
+          // Check if a report already exists and is valid
           if (userData.careerReport) {
-            setReportData(JSON.parse(userData.careerReport));
-          } else if (userData.onboardingData) {
-            // No report exists, but we have onboarding data, so generate a new one
-            const generatedReport = await generatePersonalizedReport(userData);
-            if (generatedReport) {
-              setReportData(generatedReport);
-              // Save the new report to Firestore for future visits
-              await updateDoc(userDocRef, {
-                careerReport: JSON.stringify(generatedReport)
-              });
+            try {
+              const parsedReport = JSON.parse(userData.careerReport);
+              setReportData(parsedReport);
+              shouldGenerateNewReport = false; // We have a valid report
+            } catch (e) {
+              console.error("Failed to parse existing career report, will generate a new one.", e);
+              // If parsing fails, we'll proceed to generate a new report
             }
-          } else {
-            // Onboarding not completed
-            setError("Please complete the onboarding chat to generate your report.");
+          }
+          
+          if (shouldGenerateNewReport) {
+            if (userData.onboardingData) {
+              const generatedReport = await generatePersonalizedReport(userData);
+              if (generatedReport) {
+                setReportData(generatedReport);
+                // Save the new report to Firestore for future visits
+                await updateDoc(userDocRef, {
+                  careerReport: JSON.stringify(generatedReport)
+                });
+              }
+            } else {
+              setError("Please complete the onboarding chat to generate your report.");
+            }
           }
         } else {
-          // This case might happen if a user is authenticated but their doc doesn't exist
           setError("Could not find user data. Please sign in again.");
         }
       } catch (err) {
@@ -117,7 +126,6 @@ const DashboardScreen = () => {
         return null;
       }
   
-      // --- UPDATED PROMPT USING ONBOARDING DATA ---
       const masterPrompt = `
         Act as an expert career counselor named Disha. Analyze the following student profile and generate a personalized insight report and career recommendations.
         
@@ -130,7 +138,6 @@ const DashboardScreen = () => {
         Based on this, generate a JSON object with the following structure.
       `;
   
-      // Define the JSON schema for a structured response
       const schema = {
         type: "OBJECT",
         properties: {

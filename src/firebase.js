@@ -3,15 +3,17 @@ import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import { getAnalytics } from "firebase/analytics";
 
-// TODO: Add your own Firebase configuration from your Firebase project settings
+// Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyDoQNGBHVrqNFlzx3nQdexRlt7WsU0rGN8",
-  authDomain: "hackgg-df7ed.firebaseapp.com",
-  projectId: "hackgg-df7ed",
-  storageBucket: "hackgg-df7ed.appspot.com",
-  messagingSenderId: "102289239586",
-  appId: "1:102289239586:web:420615f307e0781f5fa47b"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
 // Initialize Firebase
@@ -21,5 +23,6 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
+const analytics = getAnalytics(app);
 
-export { auth, db, storage };
+export { auth, db, storage, analytics };

@@ -55,8 +55,8 @@ const ChatOnboardingScreen = () => {
     const getNextBotMessage = async (currentHistory) => {
       setIsBotTyping(true);
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-      if (!apiKey) {
-        addMessage("Error: API Key is not configured.", 'bot');
+      if (!apiKey || apiKey === "YOUR_GEMINI_API_KEY") {
+        addMessage("Error: Gemini API Key is not configured in your .env file.", 'bot');
         setIsBotTyping(false);
         return;
       }
@@ -91,43 +91,41 @@ const ChatOnboardingScreen = () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        if (!response.ok) throw new Error(`API Error: ${response.status}`);
+
+        if (!response.ok) {
+            const errorBody = await response.json();
+            const errorMessage = errorBody.error?.message || `API Error: ${response.status}`;
+            throw new Error(errorMessage);
+        }
         
         const result = await response.json();
         const botResponseText = result.candidates[0].content.parts[0].text;
   
         // --- ROBUST JSON PARSING ---
-        // Try to find and parse the JSON block from the response
         const jsonMatch = botResponseText.match(/{[\s\S]*}/);
         if (jsonMatch) {
           try {
             const jsonData = JSON.parse(jsonMatch[0]);
             if (jsonData.summary && jsonData.data) {
-              // It's the final message. Display summary, save data, and end conversation.
               addMessage(jsonData.summary, 'bot');
-              setIsConversationDone(true); // Disable input immediately
+              setIsConversationDone(true);
               await saveOnboardingData(jsonData.data);
-              
-              // Navigate after a short delay
-              setTimeout(() => {
-                navigate('/document-upload');
-              }, 2500);
-              return; // Stop further processing
+              setTimeout(() => navigate('/onboarding/upload'), 2500);
+              return;
             }
           } catch (e) {
-            // It looked like JSON, but wasn't valid. Fall through and treat as a normal message.
             console.error("Failed to parse JSON from bot response:", e);
           }
         }
         
-        // If it's a regular message (or JSON parsing failed), just add it to the chat
         addMessage(botResponseText, 'bot');
   
       } catch (error) {
         console.error("Gemini API call failed:", error);
-        addMessage("Sorry, I'm having a little trouble. Let's move to the next step.", 'bot');
+        // Display the specific error in the chat
+        const friendlyError = `Sorry, I'm having a little trouble connecting to my brain. Please check your Gemini API Key and ensure the Generative Language API is enabled in your Google Cloud project. (Error: ${error.message})`;
+        addMessage(friendlyError, 'bot');
         setIsConversationDone(true);
-        setTimeout(() => navigate('/document-upload'), 2500);
       } finally {
         setIsBotTyping(false);
       }
@@ -189,7 +187,7 @@ const ChatOnboardingScreen = () => {
           <div className="p-4 bg-white border-t border-gray-200">
             {isConversationDone ? (
                 <div className="text-center text-gray-600 font-medium animate-pulse">
-                  Redirecting to the next step...
+                  Please resolve the API issue to continue.
                 </div>
             ) : (
                 <div className="flex items-center bg-gray-100 rounded-full p-2 shadow-inner">

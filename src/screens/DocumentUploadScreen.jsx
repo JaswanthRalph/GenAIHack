@@ -42,7 +42,7 @@ const DocumentUploadScreen = () => {
   const [marksheetFile, setMarksheetFile] = useState(null);
   
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState({}); // { resume: 0, marksheet: 100 }
+  const [uploadProgress, setUploadProgress] = useState({});
   const [error, setError] = useState('');
 
   // --- Authentication Effect ---
@@ -51,7 +51,6 @@ const DocumentUploadScreen = () => {
       if (currentUser) {
         setUser(currentUser);
       } else {
-        // Redirect to login if no user is found
         navigate('/');
       }
     });
@@ -60,8 +59,8 @@ const DocumentUploadScreen = () => {
 
   // --- File Upload Logic ---
   const handleUpload = async () => {
-    if (!user || (!resumeFile && !marksheetFile)) {
-      setError('Please select at least one document to upload.');
+    if (!user) {
+      setError('You must be logged in to upload files.');
       return;
     }
     
@@ -73,11 +72,16 @@ const DocumentUploadScreen = () => {
       { key: 'resume', file: resumeFile },
       { key: 'marksheet', file: marksheetFile }
     ].filter(item => item.file);
+    
+    if (filesToUpload.length === 0) {
+      setError('Please select at least one document to upload.');
+      setIsUploading(false);
+      return;
+    }
 
     try {
       const uploadedFileUrls = {};
 
-      // Promise-based upload for all selected files
       const uploadPromises = filesToUpload.map(item => {
         return new Promise((resolve, reject) => {
           const storageRef = ref(storage, `users/${user.uid}/documents/${item.key}_${item.file.name}`);
@@ -88,9 +92,10 @@ const DocumentUploadScreen = () => {
               const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
               setUploadProgress(prev => ({ ...prev, [item.key]: progress }));
             },
-            (error) => {
-              console.error(`Upload failed for ${item.key}:`, error);
-              reject(error);
+            (uploadError) => {
+              // This is the crucial part for catching the specific error.
+              console.error(`Upload failed for ${item.key}:`, uploadError);
+              reject(uploadError); // Reject the promise with the actual error
             },
             async () => {
               const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
@@ -105,22 +110,26 @@ const DocumentUploadScreen = () => {
 
       // --- Save URLs to Firestore ---
       const userDocRef = doc(db, 'users', user.uid);
-      await updateDoc(userDocRef, {
-        education: {
-          board: educationBoard,
-          grade: grade,
-        },
-        documents: {
-          ...uploadedFileUrls
-        }
-      });
       
-      // Navigate to the final step
+      const updatePayload = {
+        'education.board': educationBoard,
+        'education.grade': grade,
+        'onboardingCompletedAt': new Date()
+      };
+
+      for (const key in uploadedFileUrls) {
+        updatePayload[`documents.${key}`] = uploadedFileUrls[key];
+      }
+
+      await updateDoc(userDocRef, updatePayload);
+      
       navigate('/dashboard');
 
     } catch (err) {
+      // Now, display the specific Firebase error code.
+      const errorMessage = `Upload failed: ${err.code || 'An unknown error occurred.'}. Please check your Storage Rules and CORS configuration.`;
       console.error("An error occurred during upload or data saving:", err);
-      setError("Upload failed. Please try again.");
+      setError(errorMessage);
     } finally {
       setIsUploading(false);
     }
@@ -138,6 +147,7 @@ const DocumentUploadScreen = () => {
         </div>
         
         <div className="space-y-6">
+          {/* ... form inputs ... */}
           {/* Education Board Dropdown */}
           <div>
             <label htmlFor="board" className="block text-sm font-medium text-gray-700 mb-1">Education Board</label>
@@ -208,7 +218,6 @@ const DocumentUploadScreen = () => {
               )}
             </div>
           </div>
-
         </div>
 
         {/* Error Message */}
